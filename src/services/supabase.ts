@@ -30,6 +30,17 @@ export const getUserProfile = async (userId: string) => {
   return data;
 };
 
+export const checkUsernameAvailability = async (username: string) => {
+  const { data, error } = await supabase
+    .from('users')
+    .select('username')
+    .eq('username', username.toLowerCase())
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error;
+  return !data; // Returns true if username is available
+};
+
 export const updateUserProfile = async (userId: string, updates: any) => {
   const { data, error } = await supabase
     .from('users')
@@ -94,6 +105,31 @@ export const getPosts = async (userId?: string) => {
   }
 
   const { data, error } = await query;
+  
+  if (error) throw error;
+  return data;
+};
+
+// Social Authentication functions (for future implementation)
+export const signInWithGoogle = async () => {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`,
+    },
+  });
+  
+  if (error) throw error;
+  return data;
+};
+
+export const signInWithFacebook = async () => {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'facebook',
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`,
+    },
+  });
   
   if (error) throw error;
   return data;

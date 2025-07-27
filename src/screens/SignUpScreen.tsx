@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigation } from '@react-navigation/native';
 
 export const SignUpScreen: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -19,7 +20,9 @@ export const SignUpScreen: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
   const { signUp, error } = useAuth();
+  const navigation = useNavigation();
 
   const validateForm = () => {
     if (!email || !password || !fullName || !username) {
@@ -69,6 +72,52 @@ export const SignUpScreen: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleFacebookSignUp = () => {
+    Alert.alert(
+      'Facebook Sign Up',
+      'Facebook authentication is coming soon! For now, please use email signup.',
+      [
+        {
+          text: 'OK',
+          style: 'default',
+        },
+        {
+          text: 'Use Email Instead',
+          style: 'default',
+          onPress: () => {
+            // Focus on the first input field
+            console.log('Focusing on email signup form');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleGoogleSignUp = () => {
+    Alert.alert(
+      'Google Sign Up',
+      'Google authentication is coming soon! For now, please use email signup.',
+      [
+        {
+          text: 'OK',
+          style: 'default',
+        },
+        {
+          text: 'Use Email Instead',
+          style: 'default',
+          onPress: () => {
+            // Focus on the first input field
+            console.log('Focusing on email signup form');
+          },
+        },
+      ]
+    );
+  };
+
+  const navigateToLogin = () => {
+    navigation.navigate('Login' as never);
   };
 
   return (
@@ -128,12 +177,13 @@ export const SignUpScreen: React.FC = () => {
             />
 
             <TouchableOpacity
-              style={[styles.button, isLoading && styles.buttonDisabled]}
+              style={[styles.button, (isLoading || isCheckingUsername) && styles.buttonDisabled]}
               onPress={handleSignUp}
-              disabled={isLoading}
+              disabled={isLoading || isCheckingUsername}
             >
               <Text style={styles.buttonText}>
-                {isLoading ? 'Creating Account...' : 'Sign Up'}
+                {isLoading ? 'Creating Account...' : 
+                 isCheckingUsername ? 'Checking Username...' : 'Sign Up'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -144,11 +194,19 @@ export const SignUpScreen: React.FC = () => {
             <View style={styles.dividerLine} />
           </View>
 
-          <TouchableOpacity style={styles.socialButton}>
+          <TouchableOpacity 
+            style={styles.socialButton}
+            onPress={handleFacebookSignUp}
+            activeOpacity={0.8}
+          >
             <Text style={styles.socialButtonText}>Continue with Facebook</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.socialButton}>
+          <TouchableOpacity 
+            style={styles.socialButton}
+            onPress={handleGoogleSignUp}
+            activeOpacity={0.8}
+          >
             <Text style={styles.socialButtonText}>Continue with Google</Text>
           </TouchableOpacity>
 
@@ -163,7 +221,7 @@ export const SignUpScreen: React.FC = () => {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Already have an account? </Text>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={navigateToLogin} activeOpacity={0.8}>
             <Text style={styles.footerLink}>Log In</Text>
           </TouchableOpacity>
         </View>

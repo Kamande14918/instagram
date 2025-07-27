@@ -13,12 +13,14 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigation } from '@react-navigation/native';
 
 export const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn, error } = useAuth();
+  const { signIn, resetPassword, error } = useAuth();
+  const navigation = useNavigation();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -34,6 +36,84 @@ export const LoginScreen: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleForgotPassword = () => {
+    if (!email) {
+      Alert.alert(
+        'Forgot Password',
+        'Please enter your email address first, then tap "Forgot Password?"',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Reset Password',
+      `Send password reset email to ${email}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send',
+          onPress: async () => {
+            try {
+              await resetPassword(email);
+              Alert.alert(
+                'Success',
+                'Password reset email sent! Please check your inbox.',
+                [{ text: 'OK' }]
+              );
+            } catch (err) {
+              Alert.alert('Error', 'Failed to send password reset email');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleFacebookLogin = () => {
+    Alert.alert(
+      'Facebook Login',
+      'Facebook authentication is coming soon! For now, please use email login.',
+      [
+        {
+          text: 'OK',
+          style: 'default',
+        },
+        {
+          text: 'Use Email Instead',
+          style: 'default',
+          onPress: () => {
+            console.log('Focusing on email login form');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleGoogleLogin = () => {
+    Alert.alert(
+      'Google Login',
+      'Google authentication is coming soon! For now, please use email login.',
+      [
+        {
+          text: 'OK',
+          style: 'default',
+        },
+        {
+          text: 'Use Email Instead',
+          style: 'default',
+          onPress: () => {
+            console.log('Focusing on email login form');
+          },
+        },
+      ]
+    );
+  };
+
+  const navigateToSignUp = () => {
+    navigation.navigate('SignUp' as never);
   };
 
   return (
@@ -82,7 +162,11 @@ export const LoginScreen: React.FC = () => {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.forgotPassword}>
+            <TouchableOpacity 
+              style={styles.forgotPassword}
+              onPress={handleForgotPassword}
+              activeOpacity={0.8}
+            >
               <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>
           </View>
@@ -93,18 +177,26 @@ export const LoginScreen: React.FC = () => {
             <View style={styles.dividerLine} />
           </View>
 
-          <TouchableOpacity style={styles.socialButton}>
+          <TouchableOpacity 
+            style={styles.socialButton}
+            onPress={handleFacebookLogin}
+            activeOpacity={0.8}
+          >
             <Text style={styles.socialButtonText}>Continue with Facebook</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.socialButton}>
+          <TouchableOpacity 
+            style={styles.socialButton}
+            onPress={handleGoogleLogin}
+            activeOpacity={0.8}
+          >
             <Text style={styles.socialButtonText}>Continue with Google</Text>
           </TouchableOpacity>
         </ScrollView>
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Don't have an account? </Text>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={navigateToSignUp} activeOpacity={0.8}>
             <Text style={styles.footerLink}>Sign Up</Text>
           </TouchableOpacity>
         </View>
