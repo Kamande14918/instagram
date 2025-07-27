@@ -260,33 +260,45 @@ export interface Database {
       notifications: {
         Row: {
           id: string;
-          user_id: string;
+          recipient_id: string;
+          actor_id: string;
           type: string;
+          post_id: string | null;
+          comment_id: string | null;
           title: string;
-          body: string;
+          body: string | null;
           data: any;
           is_read: boolean;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
-          user_id: string;
+          recipient_id: string;
+          actor_id: string;
           type: string;
+          post_id?: string | null;
+          comment_id?: string | null;
           title: string;
-          body: string;
+          body?: string | null;
           data?: any;
           is_read?: boolean;
           created_at?: string;
+          updated_at?: string;
         };
         Update: {
           id?: string;
-          user_id?: string;
+          recipient_id?: string;
+          actor_id?: string;
           type?: string;
+          post_id?: string | null;
+          comment_id?: string | null;
           title?: string;
-          body?: string;
+          body?: string | null;
           data?: any;
           is_read?: boolean;
           created_at?: string;
+          updated_at?: string;
         };
       };
       story_views: {

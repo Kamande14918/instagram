@@ -13,14 +13,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { Notification, User } from '../types/database';
 import { supabase } from '../services/supabase';
+import { notificationService } from '../services/notifications';
 
 interface ActivityItem extends Notification {
   user?: User;
   content?: string; // Add content property for comment/mention notifications
+  actor?: User; // Add actor property for the user who performed the action
+  post?: any; // Add post property for post-related notifications
 }
 
 export const ActivityScreen: React.FC = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,80 +39,72 @@ export const ActivityScreen: React.FC = () => {
     try {
       if (!user) return;
 
-      // First, get notifications for the current user
-      let query = supabase
-        .from('notifications')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
+      setLoading(true);
 
-      if (activeTab === 'you') {
-        // Try both possible column names for receiving notifications
-        query = query.or(`recipient_id.eq.${user.id},user_id.eq.${user.id}`);
-      } else {
-        // For 'following' tab, we'd need to get notifications from users we follow
-        // This is a simplified version
-        query = query.or(`recipient_id.eq.${user.id},user_id.eq.${user.id}`);
-      }
+      // Use the notification service to get notifications
+      const notifications = await notificationService.getNotifications(user.id);
 
-      const { data: notifications, error: notificationsError } = await query;
-
-      if (notificationsError) {
-        console.error('Notifications query error:', notificationsError);
-        throw notificationsError;
-      }
-
+      // Handle empty notifications gracefully
       if (!notifications || notifications.length === 0) {
+        console.log('No notifications found for user:', user.id);
         setActivities([]);
+        
+        // Optionally create a welcome notification for new users
+        const welcomeNotification = await notificationService.createWelcomeNotification(user.id);
+        if (welcomeNotification) {
+          setActivities([{
+            ...welcomeNotification,
+            user: {
+              id: user.id,
+              username: profile?.username || user.email?.split('@')[0] || 'You',
+              avatar_url: profile?.avatar_url,
+              full_name: profile?.full_name,
+            },
+            content: welcomeNotification.body || welcomeNotification.title,
+          }]);
+        }
         return;
       }
 
-      // Get unique user IDs from notifications (the user who performed the action)
-      const userIds = [...new Set(
-        notifications.map(n => n.user_id || n.actor_id || n.from_user_id).filter(Boolean)
-      )];
-      
-      let usersData: any[] = [];
-      if (userIds.length > 0) {
-        const { data: users, error: usersError } = await supabase
-          .from('users')
-          .select('id, username, avatar_url, full_name')
-          .in('id', userIds);
-
-        if (usersError) {
-          console.warn('Error loading users:', usersError);
-        } else {
-          usersData = users || [];
-        }
-      }
-
-      // Create a map of users by their ID for quick lookup
-      const usersMap = usersData.reduce((acc, user) => {
-        acc[user.id] = user;
-        return acc;
-      }, {});
-
-      // Combine notifications with user data
-      const activitiesWithUsers = notifications.map(notification => {
-        const actorUserId = notification.user_id || notification.actor_id || notification.from_user_id;
+      // Process notifications and create activities
+      const activitiesWithUsers: ActivityItem[] = notifications.map(notification => {
         return {
           ...notification,
-          user: usersMap[actorUserId] || {
-            id: actorUserId,
+          // Map the actor data to user for backwards compatibility
+          user: notification.actor || {
+            id: notification.actor_id,
             username: 'Unknown User',
             avatar_url: null,
-            full_name: 'Unknown User'
+            full_name: null,
           },
+          content: notification.body || notification.title,
         };
       });
 
       setActivities(activitiesWithUsers);
-    } catch (error) {
+      
+    } catch (error: any) {
       console.error('Error loading activities:', error);
-      // Don't show alert for empty results, just log
-      if (error?.code !== 'PGRST116') {
-        Alert.alert('Error', 'Failed to load activities');
+      
+      // Handle specific database errors gracefully
+      if (error.code === '42703') {
+        Alert.alert(
+          'Database Configuration Issue',
+          'The notifications table needs to be updated. Please run the DATABASE_SCHEMA_COMPLETE.sql script.',
+          [{ text: 'OK' }]
+        );
+      } else if (error.code === '42P01') {
+        Alert.alert(
+          'Table Missing',
+          'The notifications table does not exist. Please run the DATABASE_SCHEMA_COMPLETE.sql script.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', 'Failed to load activities. Please try again.');
       }
+      
+      // Set empty activities to prevent app crashes
+      setActivities([]);
     } finally {
       setLoading(false);
     }
@@ -244,7 +239,7 @@ export const ActivityScreen: React.FC = () => {
             {isFollowActivity ? (
               <TouchableOpacity
                 style={styles.followButton}
-                onPress={() => handleFollowBack(activity.user_id || activity.actor_id || activity.from_user_id)}
+                onPress={() => handleFollowBack(activity.actor_id)}
               >
                 <Text style={styles.followButtonText}>Follow</Text>
               </TouchableOpacity>

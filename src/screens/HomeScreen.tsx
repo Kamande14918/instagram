@@ -14,6 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { Post, User } from '../types/database';
 import { supabase } from '../services/supabase';
+import { shareService } from '../services/share';
+import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
@@ -24,6 +26,7 @@ interface PostWithUser extends Post {
 
 export const HomeScreen: React.FC = () => {
   const { user } = useAuth();
+  const navigation = useNavigation();
   const [posts, setPosts] = useState<PostWithUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -116,6 +119,54 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
+  const handleCommentPress = (post: PostWithUser) => {
+    // Try to navigate if navigation is properly set up, otherwise show alert
+    try {
+      (navigation as any).navigate('Comments', {
+        postId: post.id,
+        postCaption: post.caption,
+        postUsername: post.users.username,
+      });
+    } catch (error) {
+      // Fallback if navigation isn't set up yet
+      Alert.alert(
+        'Comments',
+        `View comments for post by ${post.users.username}`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'View Comments', 
+            onPress: () => {
+              console.log('Navigate to comments for post:', post.id);
+              // TODO: Implement navigation when CommentsScreen is added to navigator
+            }
+          },
+        ]
+      );
+    }
+  };
+
+  const handleSharePress = (post: PostWithUser) => {
+    const imageUrl = post.media_urls && post.media_urls.length > 0 ? post.media_urls[0] : undefined;
+    
+    shareService.showShareOptions({
+      postId: post.id,
+      caption: post.caption || '',
+      imageUrl,
+      username: post.users.username,
+    });
+  };
+
+  const handleViewComments = (postId: string) => {
+    try {
+      (navigation as any).navigate('Comments', {
+        postId,
+      });
+    } catch (error) {
+      Alert.alert('Comments', 'Comments feature will be available soon!');
+    }
+  };
+
   const renderPost = (post: PostWithUser) => {
     const imageUrl = post.media_urls && post.media_urls.length > 0 ? post.media_urls[0] : null;
     
@@ -173,10 +224,16 @@ export const HomeScreen: React.FC = () => {
                 color={post.liked ? "#ed4956" : "#000"} 
               />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => handleCommentPress(post)}
+            >
               <Ionicons name="chatbubble-outline" size={24} color="#000" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => handleSharePress(post)}
+            >
               <Ionicons name="paper-plane-outline" size={24} color="#000" />
             </TouchableOpacity>
           </View>
@@ -199,6 +256,26 @@ export const HomeScreen: React.FC = () => {
               </Text>
             </View>
           )}
+
+          {/* Comments Preview */}
+          {post.comments_count > 0 && (
+            <TouchableOpacity 
+              style={styles.viewCommentsButton}
+              onPress={() => handleViewComments(post.id)}
+            >
+              <Text style={styles.viewCommentsText}>
+                View all {post.comments_count} comments
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Add a comment quick action */}
+          <TouchableOpacity 
+            style={styles.addCommentButton}
+            onPress={() => handleCommentPress(post)}
+          >
+            <Text style={styles.addCommentText}>Add a comment...</Text>
+          </TouchableOpacity>
           
           <Text style={styles.timeAgo}>
             {getTimeAgo(post.created_at)}
@@ -403,6 +480,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     marginTop: 4,
+  },
+  viewCommentsButton: {
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  viewCommentsText: {
+    fontSize: 12,
+    color: '#999',
+  },
+  addCommentButton: {
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  addCommentText: {
+    fontSize: 12,
+    color: '#999',
   },
   postText: {
     fontSize: 14,
