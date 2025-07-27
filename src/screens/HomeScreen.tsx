@@ -1,75 +1,262 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  Image,
+  Dimensions,
   Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { Post, User } from '../types/database';
+import { supabase } from '../services/supabase';
+
+const { width } = Dimensions.get('window');
+
+interface PostWithUser extends Post {
+  users: User;
+  liked?: boolean;
+}
 
 export const HomeScreen: React.FC = () => {
-  const { user, profile, signOut } = useAuth();
+  const { user } = useAuth();
+  const [posts, setPosts] = useState<PostWithUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleSignOut = async () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await signOut();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to sign out');
-            }
-          },
-        },
-      ]
-    );
+  useEffect(() => {
+    if (user) {
+      loadFeed();
+    }
+  }, [user]);
+
+  const loadFeed = async () => {
+    try {
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          users!posts_user_id_fkey(*)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+
+      const postsWithLikes = await Promise.all(
+        (data || []).map(async (post) => {
+          const { data: likeData } = await supabase
+            .from('likes')
+            .select('id')
+            .eq('post_id', post.id)
+            .eq('user_id', user.id)
+            .single();
+
+          return {
+            ...post,
+            liked: !!likeData,
+          };
+        })
+      );
+
+      setPosts(postsWithLikes);
+    } catch (error) {
+      console.error('Error loading feed:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Instagram</Text>
-        <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton}>
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
-      </View>
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadFeed();
+    setRefreshing(false);
+  };
 
-      <View style={styles.content}>
-        <Text style={styles.welcomeText}>Welcome to Instagram Clone!</Text>
-        
-        {profile && (
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileText}>Full Name: {profile.full_name}</Text>
-            <Text style={styles.profileText}>Username: @{profile.username}</Text>
-            <Text style={styles.profileText}>Email: {user?.email}</Text>
-            {profile.bio && <Text style={styles.profileText}>Bio: {profile.bio}</Text>}
-            <Text style={styles.profileText}>Followers: {profile.followers_count}</Text>
-            <Text style={styles.profileText}>Following: {profile.following_count}</Text>
-            <Text style={styles.profileText}>Posts: {profile.posts_count}</Text>
-            <Text style={styles.profileText}>Verified: {profile.is_verified ? 'Yes' : 'No'}</Text>
-            <Text style={styles.profileText}>Private: {profile.is_private ? 'Yes' : 'No'}</Text>
+  const handleLike = async (postId: string, isLiked: boolean) => {
+    try {
+      if (!user) return;
+
+      if (isLiked) {
+        // Unlike
+        const { error } = await supabase
+          .from('likes')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.id);
+
+        if (error) throw error;
+      } else {
+        // Like
+        const { error } = await supabase
+          .from('likes')
+          .insert({
+            user_id: user.id,
+            post_id: postId,
+          });
+
+        if (error) throw error;
+      }
+
+      // Update local state
+      setPosts(posts.map(post => 
+        post.id === postId 
+          ? { ...post, liked: !isLiked, likes_count: post.likes_count + (isLiked ? -1 : 1) }
+          : post
+      ));
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      Alert.alert('Error', 'Failed to update like');
+    }
+  };
+
+  const renderPost = (post: PostWithUser) => {
+    const imageUrl = post.media_urls && post.media_urls.length > 0 ? post.media_urls[0] : null;
+    
+    return (
+      <View key={post.id} style={styles.postContainer}>
+        {/* Post Header */}
+        <View style={styles.postHeader}>
+          <View style={styles.userInfo}>
+            <View style={styles.avatar}>
+              {post.users.avatar_url ? (
+                <Image source={{ uri: post.users.avatar_url }} style={styles.avatarImage} />
+              ) : (
+                <Ionicons name="person" size={20} color="#999" />
+              )}
+            </View>
+            <Text style={styles.username}>{post.users.username}</Text>
+          </View>
+          <TouchableOpacity>
+            <Ionicons name="ellipsis-horizontal" size={16} color="#000" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Post Image */}
+        {imageUrl ? (
+          <View style={styles.imageContainer}>
+            <Image 
+              source={{ uri: imageUrl }} 
+              style={styles.postImage}
+              onError={(error) => {
+                console.log('Image failed to load:', error.nativeEvent.error);
+                console.log('Image URL:', imageUrl);
+              }}
+              onLoad={() => {
+                console.log('Image loaded successfully:', imageUrl);
+              }}
+            />
+          </View>
+        ) : (
+          <View style={styles.noImageContainer}>
+            <Ionicons name="image-outline" size={40} color="#999" />
+            <Text style={styles.noImageText}>No image available</Text>
           </View>
         )}
 
-        <View style={styles.featuresContainer}>
-          <Text style={styles.featuresTitle}>Coming Soon:</Text>
-          <Text style={styles.featureItem}>• Photo & Video Sharing</Text>
-          <Text style={styles.featureItem}>• Stories</Text>
-          <Text style={styles.featureItem}>• Direct Messaging</Text>
-          <Text style={styles.featureItem}>• Explore Page</Text>
-          <Text style={styles.featureItem}>• Reels</Text>
-          <Text style={styles.featureItem}>• Live Streaming</Text>
+        {/* Post Actions */}
+        <View style={styles.postActions}>
+          <View style={styles.leftActions}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => handleLike(post.id, post.liked || false)}
+            >
+              <Ionicons 
+                name={post.liked ? "heart" : "heart-outline"} 
+                size={24} 
+                color={post.liked ? "#ed4956" : "#000"} 
+              />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionButton}>
+              <Ionicons name="chatbubble-outline" size={24} color="#000" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionButton}>
+              <Ionicons name="paper-plane-outline" size={24} color="#000" />
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity>
+            <Ionicons name="bookmark-outline" size={24} color="#000" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Post Info */}
+        <View style={styles.postInfo}>
+          <Text style={styles.likesCount}>
+            {post.likes_count || 0} {(post.likes_count || 0) === 1 ? 'like' : 'likes'}
+          </Text>
+          
+          {post.caption && (
+            <View style={styles.captionContainer}>
+              <Text style={styles.caption}>
+                <Text style={styles.captionUsername}>{post.users.username}</Text>
+                {' '}{post.caption}
+              </Text>
+            </View>
+          )}
+          
+          <Text style={styles.timeAgo}>
+            {getTimeAgo(post.created_at)}
+          </Text>
         </View>
       </View>
-    </SafeAreaView>
+    );
+  };
+
+  const getTimeAgo = (timestamp: string) => {
+    const now = new Date();
+    const then = new Date(timestamp);
+    const diffInMinutes = Math.floor((now.getTime() - then.getTime()) / (1000 * 60));
+
+    if (diffInMinutes < 1) return 'now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h`;
+    if (diffInMinutes < 10080) return `${Math.floor(diffInMinutes / 1440)}d`;
+    return `${Math.floor(diffInMinutes / 10080)}w`;
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity>
+          <Ionicons name="camera-outline" size={24} color="#000" />
+        </TouchableOpacity>
+        <Text style={styles.logo}>Instagram</Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.headerButton}>
+            <Ionicons name="heart-outline" size={24} color="#000" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerButton}>
+            <Ionicons name="paper-plane-outline" size={24} color="#000" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <ScrollView
+        style={styles.feed}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {posts.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="camera-outline" size={80} color="#999" />
+            <Text style={styles.emptyStateTitle}>Welcome to Instagram!</Text>
+            <Text style={styles.emptyStateText}>
+              Create your first post to get started, or find people to follow.
+            </Text>
+          </View>
+        ) : (
+          posts.map((post) => renderPost(post))
+        )}
+      </ScrollView>
+    </View>
   );
 };
 
@@ -82,63 +269,143 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#e1e1e1',
   },
-  title: {
+  logo: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
   },
-  signOutButton: {
-    backgroundColor: '#ff4757',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 5,
+  headerActions: {
+    flexDirection: 'row',
   },
-  signOutText: {
-    color: 'white',
-    fontWeight: 'bold',
+  headerButton: {
+    marginLeft: 16,
   },
-  content: {
+  feed: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 30,
   },
-  welcomeText: {
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 32,
+  },
+  emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: '#666',
     textAlign: 'center',
-    marginBottom: 30,
-    color: '#333',
+    lineHeight: 18,
+    marginBottom: 20,
   },
-  profileInfo: {
-    backgroundColor: '#f8f9fa',
-    padding: 20,
-    borderRadius: 10,
-    marginBottom: 30,
+  postContainer: {
+    backgroundColor: '#fff',
+    marginBottom: 1,
+    borderBottomWidth: 1,
+    borderBottomColor: '#efefef',
   },
-  profileText: {
-    fontSize: 16,
-    marginBottom: 8,
-    color: '#333',
+  postHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  featuresContainer: {
-    backgroundColor: '#e8f4f8',
-    padding: 20,
-    borderRadius: 10,
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  featuresTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    color: '#333',
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  featureItem: {
-    fontSize: 16,
-    marginBottom: 8,
-    color: '#555',
+  avatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  username: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+  },
+  imageContainer: {
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: '#f0f0f0',
+  },
+  postImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  noImageContainer: {
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: '#f8f8f8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noImageText: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 8,
+  },
+  postActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  leftActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButton: {
+    marginRight: 16,
+    padding: 4,
+  },
+  postInfo: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  likesCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 4,
+  },
+  captionContainer: {
+    marginBottom: 4,
+  },
+  caption: {
+    fontSize: 14,
+    color: '#000',
+    lineHeight: 18,
+  },
+  captionUsername: {
+    fontWeight: '600',
+  },
+  timeAgo: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
+  },
+  postText: {
+    fontSize: 14,
+    lineHeight: 18,
   },
 });

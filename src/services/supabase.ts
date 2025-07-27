@@ -24,9 +24,49 @@ export const getUserProfile = async (userId: string) => {
     .from('users')
     .select('*')
     .eq('id', userId)
-    .single();
+    .maybeSingle();
   
   if (error) throw error;
+  
+  // If no profile exists, create a basic one
+  if (!data) {
+    const { data: authUser } = await supabase.auth.getUser();
+    if (authUser?.user) {
+      const newProfile = {
+        id: userId,
+        email: authUser.user.email,
+        username: authUser.user.email?.split('@')[0] || `user_${userId.slice(0, 8)}`,
+        full_name: authUser.user.user_metadata?.full_name || 'User',
+        bio: '',
+        avatar_url: null,
+        website: null,
+        is_private: false,
+        is_verified: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      try {
+        const { data: createdProfile, error: createError } = await supabase
+          .from('users')
+          .insert(newProfile)
+          .select()
+          .single();
+
+        if (createError) {
+          console.warn('Could not create user profile:', createError);
+          // Return the basic profile even if insert fails due to RLS
+          return newProfile;
+        }
+
+        return createdProfile;
+      } catch (insertError) {
+        console.warn('Insert failed, returning basic profile:', insertError);
+        return newProfile;
+      }
+    }
+  }
+  
   return data;
 };
 
@@ -35,21 +75,51 @@ export const checkUsernameAvailability = async (username: string) => {
     .from('users')
     .select('username')
     .eq('username', username.toLowerCase())
-    .single();
+    .maybeSingle();
   
   if (error && error.code !== 'PGRST116') throw error;
   return !data; // Returns true if username is available
 };
 
 export const updateUserProfile = async (userId: string, updates: any) => {
+  // First try to update
   const { data, error } = await supabase
     .from('users')
-    .update(updates)
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', userId)
     .select()
-    .single();
+    .maybeSingle();
   
-  if (error) throw error;
+  if (error) {
+    // If update fails because user doesn't exist, try to create profile first
+    if (error.code === 'PGRST116') {
+      try {
+        const profile = await getUserProfile(userId);
+        if (profile) {
+          // Retry the update
+          const { data: updatedData, error: retryError } = await supabase
+            .from('users')
+            .update({
+              ...updates,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', userId)
+            .select()
+            .single();
+          
+          if (retryError) throw retryError;
+          return updatedData;
+        }
+      } catch (createError) {
+        console.warn('Could not create profile for update:', createError);
+      }
+    }
+    throw error;
+  }
+  
   return data;
 };
 
