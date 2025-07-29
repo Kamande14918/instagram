@@ -2,12 +2,72 @@ import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Database } from '../types/database';
 
+// Debug environment variables
+console.log('🔍 Environment Debug Info:');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('EXPO_PUBLIC_SUPABASE_URL exists:', !!process.env.EXPO_PUBLIC_SUPABASE_URL);
+console.log('EXPO_PUBLIC_SUPABASE_ANON_KEY exists:', !!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY);
+console.log('EXPO_PUBLIC_SUPABASE_URL value:', process.env.EXPO_PUBLIC_SUPABASE_URL);
+
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+if (!supabaseUrl) {
+  console.error('❌ EXPO_PUBLIC_SUPABASE_URL is missing');
+  throw new Error(`
+🚨 SUPABASE URL MISSING 🚨
+
+The EXPO_PUBLIC_SUPABASE_URL environment variable is not set.
+
+Current value: ${supabaseUrl}
+
+Please check your .env file and ensure it contains:
+EXPO_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+
+Make sure:
+1. The .env file is in the root directory
+2. There are no spaces around the = sign
+3. The app has been restarted after .env changes
+  `);
 }
+
+if (!supabaseAnonKey) {
+  console.error('❌ EXPO_PUBLIC_SUPABASE_ANON_KEY is missing');
+  throw new Error(`
+🚨 SUPABASE ANON KEY MISSING 🚨
+
+The EXPO_PUBLIC_SUPABASE_ANON_KEY environment variable is not set.
+
+Current value: ${supabaseAnonKey}
+
+Please check your .env file and ensure it contains:
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here
+
+Make sure:
+1. The .env file is in the root directory
+2. There are no spaces around the = sign
+3. The app has been restarted after .env changes
+  `);
+}
+
+// Validate URL format
+try {
+  new URL(supabaseUrl);
+  console.log('✅ Supabase URL format is valid');
+} catch (error) {
+  console.error('❌ Invalid Supabase URL format:', supabaseUrl);
+  throw new Error(`
+🚨 INVALID SUPABASE URL FORMAT 🚨
+
+The Supabase URL format is invalid: ${supabaseUrl}
+
+Expected format: https://your-project-id.supabase.co
+
+Please check your .env file and correct the URL.
+  `);
+}
+
+console.log('✅ Environment variables validated successfully');
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {

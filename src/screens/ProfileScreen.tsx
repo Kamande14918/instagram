@@ -9,19 +9,22 @@ import {
   Dimensions,
   Alert,
   RefreshControl,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { User, Post } from '../types/database';
 import { supabase } from '../services/supabase';
 
-const { width } = Dimensions.get('window');
-const ITEM_SIZE = (width - 3) / 3;
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const ITEM_SIZE = (screenWidth - 3) / 3;
 
 export const ProfileScreen: React.FC = () => {
   const { user, updateProfile } = useAuth();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

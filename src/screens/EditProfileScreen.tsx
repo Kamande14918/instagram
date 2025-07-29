@@ -9,8 +9,11 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  SafeAreaView,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
@@ -20,6 +23,8 @@ import { supabase } from '../services/supabase';
 export const EditProfileScreen: React.FC = () => {
   const { user, updateProfile } = useAuth();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [profile, setProfile] = useState<Partial<User>>({
@@ -125,8 +130,14 @@ export const EditProfileScreen: React.FC = () => {
 
       if (error) throw error;
 
-      // Update the auth context
-      await updateProfile();
+      // Update the auth context with the new profile data
+      await updateProfile({
+        full_name: profile.full_name?.trim(),
+        username: profile.username?.trim(),
+        bio: profile.bio?.trim() || null,
+        website: profile.website?.trim() || null,
+        avatar_url: profile.avatar_url || null,
+      });
 
       Alert.alert('Success', 'Profile updated successfully', [
         { text: 'OK', onPress: () => navigation.goBack() }
@@ -242,7 +253,15 @@ export const EditProfileScreen: React.FC = () => {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <SafeAreaView style={[styles.safeArea, { paddingBottom: insets.bottom }]}>
+      <ScrollView 
+        style={styles.container}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { minHeight: screenHeight - insets.top - insets.bottom }
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
       {/* Profile Picture Section */}
       <View style={styles.avatarSection}>
         <View style={styles.avatarContainer}>
@@ -398,18 +417,28 @@ export const EditProfileScreen: React.FC = () => {
           )}
         </TouchableOpacity>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
   container: {
     flex: 1,
     backgroundColor: '#fff',
   },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
+  },
   avatarSection: {
     alignItems: 'center',
-    paddingVertical: 32,
+    paddingVertical: Math.max(32, Dimensions.get('window').height * 0.04),
+    paddingHorizontal: 16,
     borderBottomWidth: 0.5,
     borderBottomColor: '#e1e1e1',
   },
@@ -418,9 +447,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: Math.min(100, Dimensions.get('window').width * 0.25),
+    height: Math.min(100, Dimensions.get('window').width * 0.25),
+    borderRadius: Math.min(50, Dimensions.get('window').width * 0.125),
   },
   placeholderAvatar: {
     backgroundColor: '#f0f0f0',
@@ -434,7 +463,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 50,
+    borderRadius: Math.min(50, Dimensions.get('window').width * 0.125),
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -454,11 +483,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   formSection: {
-    paddingHorizontal: 16,
+    paddingHorizontal: Math.max(16, Dimensions.get('window').width * 0.04),
     paddingVertical: 20,
   },
   inputGroup: {
-    marginBottom: 24,
+    marginBottom: Math.max(20, Dimensions.get('window').height * 0.025),
   },
   label: {
     fontSize: 14,
@@ -470,10 +499,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 16,
+    paddingHorizontal: Math.max(12, Dimensions.get('window').width * 0.03),
+    paddingVertical: Math.max(12, Dimensions.get('window').height * 0.015),
+    fontSize: Math.max(16, Dimensions.get('window').width * 0.04),
     backgroundColor: '#fff',
+    minHeight: 44, // Ensure minimum touch target
   },
   textArea: {
     height: 80,
@@ -491,13 +521,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   privacySection: {
-    paddingHorizontal: 16,
+    paddingHorizontal: Math.max(16, Dimensions.get('window').width * 0.04),
     paddingVertical: 20,
     borderTopWidth: 0.5,
     borderTopColor: '#e1e1e1',
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: Math.max(18, Dimensions.get('window').width * 0.045),
     fontWeight: 'bold',
     marginBottom: 16,
   },
@@ -528,7 +558,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   professionalSection: {
-    paddingHorizontal: 16,
+    paddingHorizontal: Math.max(16, Dimensions.get('window').width * 0.04),
     paddingVertical: 20,
     borderTopWidth: 0.5,
     borderTopColor: '#e1e1e1',
@@ -558,16 +588,17 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   saveSection: {
-    paddingHorizontal: 16,
+    paddingHorizontal: Math.max(16, Dimensions.get('window').width * 0.04),
     paddingVertical: 20,
     borderTopWidth: 0.5,
     borderTopColor: '#e1e1e1',
   },
   saveButton: {
     backgroundColor: '#0095f6',
-    paddingVertical: 12,
+    paddingVertical: Math.max(12, Dimensions.get('window').height * 0.015),
     borderRadius: 8,
     alignItems: 'center',
+    minHeight: 44, // Ensure minimum touch target
   },
   saveButtonDisabled: {
     backgroundColor: '#b3d9ff',

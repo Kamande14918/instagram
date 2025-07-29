@@ -11,11 +11,17 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  SafeAreaView,
+  Dimensions,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { commentService, CommentWithUser } from '../services/comments';
 import { useNavigation, useRoute } from '@react-navigation/native';
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 interface CommentsScreenProps {
   route: {
@@ -31,16 +37,38 @@ export const CommentsScreen: React.FC = () => {
   const { user } = useAuth();
   const navigation = useNavigation();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
   const { postId, postCaption, postUsername } = route.params as any;
   
   const [comments, setComments] = useState<CommentWithUser[]>([]);
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
     loadComments();
+    
+    // Keyboard event listeners for dynamic height calculation
+    const keyboardWillShow = (e: any) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    };
+    
+    const keyboardWillHide = () => {
+      setKeyboardHeight(0);
+    };
+    
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    
+    const showSubscription = Keyboard.addListener(showEvent, keyboardWillShow);
+    const hideSubscription = Keyboard.addListener(hideEvent, keyboardWillHide);
+    
+    return () => {
+      showSubscription?.remove();
+      hideSubscription?.remove();
+    };
   }, [postId]);
 
   const loadComments = async () => {
@@ -191,15 +219,6 @@ export const CommentsScreen: React.FC = () => {
     </View>
   );
 
-  const renderHeader = () => (
-    <View style={styles.postContainer}>
-      <View style={styles.postHeader}>
-        <Text style={styles.postUsername}>{postUsername}</Text>
-        <Text style={styles.postCaption}>{postCaption}</Text>
-      </View>
-    </View>
-  );
-
   const getTimeAgo = (timestamp: string) => {
     const now = new Date();
     const then = new Date(timestamp);
@@ -221,35 +240,45 @@ export const CommentsScreen: React.FC = () => {
   }
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#000" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Comments</Text>
-        <TouchableOpacity>
-          <Ionicons name="paper-plane-outline" size={24} color="#000" />
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
+      <KeyboardAvoidingView 
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color="#000" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Comments</Text>
+          <TouchableOpacity>
+            <Ionicons name="paper-plane-outline" size={24} color="#000" />
+          </TouchableOpacity>
+        </View>
 
-      {/* Comments List */}
+        {/* Comments List */}
       <FlatList
         ref={flatListRef}
         style={styles.commentsList}
         data={comments}
         renderItem={renderComment}
         keyExtractor={item => item.id}
-        ListHeaderComponent={renderHeader}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ 
+          paddingBottom: Math.max(20, screenHeight * 0.025) + (keyboardHeight > 0 ? keyboardHeight * 0.2 : 0),
+          flexGrow: 1 
+        }}
       />
 
       {/* Comment Input */}
-      <View style={styles.inputContainer}>
+      <View style={[
+        styles.inputContainer, 
+        { 
+          paddingBottom: Math.max(insets.bottom, keyboardHeight > 0 ? 10 : insets.bottom),
+          marginBottom: Platform.OS === 'android' && keyboardHeight > 0 ? keyboardHeight * 0.1 : 0
+        }
+      ]}>
         <View style={styles.inputAvatar}>
           <Ionicons name="person-circle" size={32} color="#ccc" />
         </View>
@@ -277,11 +306,16 @@ export const CommentsScreen: React.FC = () => {
           )}
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
   container: {
     flex: 1,
     backgroundColor: '#fff',
@@ -295,8 +329,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: Math.max(16, screenWidth * 0.04),
+    paddingVertical: Math.max(12, screenHeight * 0.015),
     borderBottomWidth: 0.5,
     borderBottomColor: '#e1e1e1',
   },
@@ -304,41 +338,22 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  postContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#e1e1e1',
-  },
-  postHeader: {
-    marginBottom: 8,
-  },
-  postUsername: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  postCaption: {
-    fontSize: 14,
-    color: '#000',
-    lineHeight: 18,
-  },
   commentsList: {
     flex: 1,
   },
   commentContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: Math.max(16, screenWidth * 0.04),
+    paddingVertical: Math.max(12, screenHeight * 0.015),
     alignItems: 'flex-start',
   },
   commentAvatar: {
-    marginRight: 12,
+    marginRight: Math.max(12, screenWidth * 0.03),
   },
   avatarImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: Math.max(32, screenWidth * 0.08),
+    height: Math.max(32, screenWidth * 0.08),
+    borderRadius: Math.max(16, screenWidth * 0.04),
   },
   commentContent: {
     flex: 1,
@@ -346,25 +361,25 @@ const styles = StyleSheet.create({
   commentBubble: {
     backgroundColor: '#f0f0f0',
     borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 4,
+    paddingHorizontal: Math.max(12, screenWidth * 0.03),
+    paddingVertical: Math.max(8, screenHeight * 0.01),
+    marginBottom: Math.max(4, screenHeight * 0.005),
   },
   commentUsername: {
-    fontSize: 12,
+    fontSize: Math.max(12, screenWidth * 0.03),
     fontWeight: '600',
     color: '#0095f6',
-    marginBottom: 2,
+    marginBottom: Math.max(2, screenHeight * 0.0025),
   },
   commentText: {
-    fontSize: 14,
+    fontSize: Math.max(14, screenWidth * 0.035),
     color: '#000',
-    lineHeight: 18,
+    lineHeight: Math.max(18, screenWidth * 0.045),
   },
   commentActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: Math.max(12, screenWidth * 0.03),
   },
   commentTime: {
     fontSize: 12,
@@ -391,29 +406,32 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: Math.max(16, screenWidth * 0.04),
+    paddingVertical: Math.max(12, screenHeight * 0.015),
     borderTopWidth: 0.5,
     borderTopColor: '#e1e1e1',
     backgroundColor: '#fff',
   },
   inputAvatar: {
-    marginRight: 12,
-    marginBottom: 8,
+    marginRight: Math.max(12, screenWidth * 0.03),
+    marginBottom: Math.max(8, screenHeight * 0.01),
   },
   textInput: {
     flex: 1,
-    maxHeight: 100,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    maxHeight: Math.max(80, screenHeight * 0.12),
+    paddingHorizontal: Math.max(16, screenWidth * 0.04),
+    paddingVertical: Math.max(12, screenHeight * 0.015),
     backgroundColor: '#f0f0f0',
     borderRadius: 20,
-    fontSize: 14,
-    marginRight: 12,
+    fontSize: Math.max(14, screenWidth * 0.035),
+    marginRight: Math.max(12, screenWidth * 0.03),
+    minHeight: 40, // Ensure minimum touch target
   },
   postButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: Math.max(16, screenWidth * 0.04),
+    paddingVertical: Math.max(12, screenHeight * 0.015),
+    minHeight: 44, // Ensure minimum touch target
+    justifyContent: 'center',
   },
   postButtonDisabled: {
     opacity: 0.5,

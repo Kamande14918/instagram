@@ -10,10 +10,15 @@ import {
   Platform,
   ScrollView,
   Image,
+  SafeAreaView,
+  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 export const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -21,6 +26,7 @@ export const LoginScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { signIn, resetPassword, error } = useAuth();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -117,21 +123,27 @@ export const LoginScreen: React.FC = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <LinearGradient
-        colors={['#405DE6', '#5851DB', '#833AB4', '#C13584', '#E1306C', '#FD1D1D']}
-        style={styles.gradient}
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
-          <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>Instagram</Text>
-          </View>
+        <LinearGradient
+          colors={['#405DE6', '#5851DB', '#833AB4', '#C13584', '#E1306C', '#FD1D1D']}
+          style={styles.gradient}
+        >
+          <ScrollView 
+            contentContainerStyle={[
+              styles.scrollContainer,
+              { minHeight: screenHeight - insets.top - insets.bottom }
+            ]}
+          >
+            <View style={styles.logoContainer}>
+              <Text style={styles.logoText}>Instagram</Text>
+            </View>
 
-          <View style={styles.formContainer}>
-            <TextInput
+            <View style={styles.formContainer}>
+              <TextInput
               style={styles.input}
               placeholder="Email"
               placeholderTextColor="#999"
@@ -169,43 +181,47 @@ export const LoginScreen: React.FC = () => {
             >
               <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>
-          </View>
+            </View>
+            
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>OR</Text>
+              <View style={styles.dividerLine} />
+            </View>
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
-          </View>
+            <TouchableOpacity 
+              style={styles.socialButton}
+              onPress={handleFacebookLogin}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.socialButtonText}>Continue with Facebook</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.socialButton}
-            onPress={handleFacebookLogin}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.socialButtonText}>Continue with Facebook</Text>
-          </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.socialButton}
+              onPress={handleGoogleLogin}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.socialButtonText}>Continue with Google</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.socialButton}
-            onPress={handleGoogleLogin}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.socialButtonText}>Continue with Google</Text>
-          </TouchableOpacity>
-        </ScrollView>
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Don't have an account? </Text>
-          <TouchableOpacity onPress={navigateToSignUp} activeOpacity={0.8}>
-            <Text style={styles.footerLink}>Sign Up</Text>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-    </KeyboardAvoidingView>
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Don't have an account? </Text>
+              <TouchableOpacity onPress={navigateToSignUp} activeOpacity={0.8}>
+                <Text style={styles.footerLink}>Sign Up</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </LinearGradient>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
   container: {
     flex: 1,
   },
@@ -215,37 +231,39 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: Math.max(20, screenWidth * 0.05),
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 50,
+    marginBottom: Math.max(40, screenHeight * 0.06),
   },
   logoText: {
-    fontSize: 32,
+    fontSize: Math.max(28, screenWidth * 0.08),
     fontWeight: 'bold',
     color: 'white',
     fontFamily: Platform.OS === 'ios' ? 'Billabong' : 'serif',
   },
   formContainer: {
-    marginBottom: 30,
+    marginBottom: Math.max(25, screenHeight * 0.035),
   },
   input: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: 8,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    marginBottom: 15,
-    fontSize: 16,
+    paddingHorizontal: Math.max(15, screenWidth * 0.04),
+    paddingVertical: Math.max(12, screenHeight * 0.015),
+    marginBottom: Math.max(12, screenHeight * 0.018),
+    fontSize: Math.max(16, screenWidth * 0.04),
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
+    minHeight: 44, // Ensure minimum touch target
   },
   button: {
     backgroundColor: '#3897f0',
     borderRadius: 8,
-    paddingVertical: 12,
+    paddingVertical: Math.max(12, screenHeight * 0.015),
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: Math.max(12, screenHeight * 0.018),
+    minHeight: 44, // Ensure minimum touch target
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -282,11 +300,12 @@ const styles = StyleSheet.create({
   socialButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 8,
-    paddingVertical: 12,
+    paddingVertical: Math.max(12, screenHeight * 0.015),
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: Math.max(12, screenHeight * 0.018),
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
+    minHeight: 44, // Ensure minimum touch target
   },
   socialButtonText: {
     color: 'white',
@@ -297,8 +316,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 20,
+    paddingVertical: Math.max(20, screenHeight * 0.025),
+    paddingHorizontal: Math.max(20, screenWidth * 0.05),
+    marginTop: Math.max(20, screenHeight * 0.025),
   },
   footerText: {
     color: 'rgba(255, 255, 255, 0.8)',

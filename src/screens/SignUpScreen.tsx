@@ -9,10 +9,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  SafeAreaView,
+  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 export const SignUpScreen: React.FC = () => {
   const [email, setEmail] = useState('');

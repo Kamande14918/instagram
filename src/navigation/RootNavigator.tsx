@@ -10,6 +10,7 @@ import { CreatePostScreen } from '../screens/CreatePostScreen';
 import { ActivityScreen } from '../screens/ActivityScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { EditProfileScreen } from '../screens/EditProfileScreen';
+import { CommentsScreen } from '../screens/CommentsScreen';
 import { useAuth } from '../contexts/AuthContext';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,8 +28,19 @@ export type MainTabParamList = {
   Profile: undefined;
 };
 
+export type RootStackParamList = {
+  MainTabs: undefined;
+  Comments: {
+    postId: string;
+    postCaption?: string;
+    postUsername?: string;
+  };
+  EditProfile: undefined;
+};
+
 const AuthStack = createStackNavigator<AuthStackParamList>();
 const MainTabs = createBottomTabNavigator<MainTabParamList>();
+const RootStack = createStackNavigator<RootStackParamList>();
 
 function MainTabNavigator() {
   return (
@@ -75,6 +87,46 @@ function AuthNavigator() {
   );
 }
 
+function MainStackNavigator() {
+  return (
+    <RootStack.Navigator>
+      <RootStack.Screen 
+        name="MainTabs" 
+        component={MainTabNavigator} 
+        options={{ headerShown: false }}
+      />
+      <RootStack.Screen 
+        name="Comments" 
+        component={CommentsScreen}
+        options={{
+          title: 'Comments',
+          headerStyle: {
+            backgroundColor: '#fff',
+          },
+          headerTintColor: '#000',
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}
+      />
+      <RootStack.Screen 
+        name="EditProfile" 
+        component={EditProfileScreen}
+        options={{
+          title: 'Edit Profile',
+          headerStyle: {
+            backgroundColor: '#fff',
+          },
+          headerTintColor: '#000',
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}
+      />
+    </RootStack.Navigator>
+  );
+}
+
 export const RootNavigator: React.FC = () => {
   const { user, loading } = useAuth();
 
@@ -89,7 +141,7 @@ export const RootNavigator: React.FC = () => {
 
   return (
     <NavigationContainer>
-      {user ? <MainTabNavigator /> : <AuthNavigator />}
+      {user ? <MainStackNavigator /> : <AuthNavigator />}
     </NavigationContainer>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,15 +9,17 @@ import {
   Image,
   Dimensions,
   Alert,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { Post, User } from '../types/database';
 import { supabase } from '../services/supabase';
 import { shareService } from '../services/share';
 import { useNavigation } from '@react-navigation/native';
 
-const { width } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 interface PostWithUser extends Post {
   users: User;
@@ -27,6 +29,7 @@ interface PostWithUser extends Post {
 export const HomeScreen: React.FC = () => {
   const { user } = useAuth();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<PostWithUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -37,11 +40,17 @@ export const HomeScreen: React.FC = () => {
     }
   }, [user]);
 
-  const loadFeed = async () => {
+  const loadFeed = useCallback(async () => {
     try {
-      if (!user) return;
+      setLoading(true);
 
-      const { data, error } = await supabase
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      // Fetch posts with user data
+      const { data: queryData, error } = await supabase
         .from('posts')
         .select(`
           *,
@@ -50,37 +59,51 @@ export const HomeScreen: React.FC = () => {
         .order('created_at', { ascending: false })
         .limit(20);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading feed:', error);
+        throw error;
+      }
 
-      const postsWithLikes = await Promise.all(
-        (data || []).map(async (post) => {
-          const { data: likeData } = await supabase
-            .from('likes')
-            .select('id')
-            .eq('post_id', post.id)
-            .eq('user_id', user.id)
-            .single();
+      let data = queryData;
 
-          return {
-            ...post,
-            liked: !!likeData,
-          };
-        })
-      );
+      if (!data || data.length === 0) {
+        setPosts([]);
+        setLoading(false);
+        return;
+      }
+
+      // Batch check likes for all posts
+      const postIds = data.map(post => post.id);
+      const { data: likesData } = await supabase
+        .from('likes')
+        .select('post_id')
+        .eq('user_id', user.id)
+        .in('post_id', postIds);
+
+      const likedPostIds = new Set(likesData?.map(like => like.post_id) || []);
+
+      const postsWithLikes = data.map(post => ({
+        ...post,
+        liked: likedPostIds.has(post.id),
+      }));
 
       setPosts(postsWithLikes);
-    } catch (error) {
-      console.error('Error loading feed:', error);
+      
+    } catch (error: any) {
+      console.error('Error loading feed:', error.message || error);
+      Alert.alert('Error', 'Failed to load posts. Please try again.');
+      setPosts([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    setLoading(false);
     await loadFeed();
     setRefreshing(false);
-  };
+  }, [loadFeed]);
 
   const handleLike = async (postId: string, isLiked: boolean) => {
     try {
@@ -120,30 +143,11 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleCommentPress = (post: PostWithUser) => {
-    // Try to navigate if navigation is properly set up, otherwise show alert
-    try {
-      (navigation as any).navigate('Comments', {
-        postId: post.id,
-        postCaption: post.caption,
-        postUsername: post.users.username,
-      });
-    } catch (error) {
-      // Fallback if navigation isn't set up yet
-      Alert.alert(
-        'Comments',
-        `View comments for post by ${post.users.username}`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'View Comments', 
-            onPress: () => {
-              console.log('Navigate to comments for post:', post.id);
-              // TODO: Implement navigation when CommentsScreen is added to navigator
-            }
-          },
-        ]
-      );
-    }
+    (navigation as any).navigate('Comments', {
+      postId: post.id,
+      postCaption: post.caption,
+      postUsername: post.users.username,
+    });
   };
 
   const handleSharePress = (post: PostWithUser) => {
@@ -298,22 +302,23 @@ export const HomeScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity>
-          <Ionicons name="camera-outline" size={24} color="#000" />
-        </TouchableOpacity>
-        <Text style={styles.logo}>Instagram</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerButton}>
-            <Ionicons name="heart-outline" size={24} color="#000" />
+    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity>
+            <Ionicons name="camera-outline" size={24} color="#000" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerButton}>
-            <Ionicons name="paper-plane-outline" size={24} color="#000" />
-          </TouchableOpacity>
+          <Text style={styles.logo}>Instagram</Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.headerButton}>
+              <Ionicons name="heart-outline" size={24} color="#000" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerButton}>
+              <Ionicons name="paper-plane-outline" size={24} color="#000" />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
 
       <ScrollView
         style={styles.feed}
@@ -321,23 +326,51 @@ export const HomeScreen: React.FC = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {posts.length === 0 ? (
+        {/* Debug Info - Remove in production
+        {__DEV__ && (
+          <View style={{ padding: 10, backgroundColor: '#f0f0f0', margin: 10 }}>
+            <Text>🐛 Debug Info:</Text>
+            <Text>Loading: {loading.toString()}</Text>
+            <Text>Posts count: {posts.length}</Text>
+            <Text>User: {user?.id?.slice(0, 8) || 'No user'}</Text>
+            <Text>Refreshing: {refreshing.toString()}</Text>
+          </View>
+        )} */}
+
+        {posts.length === 0 && loading ? (
+          <View style={styles.loadingState}>
+            <Text style={styles.loadingText}>🔄 Loading posts...</Text>
+            <Text style={styles.loadingSubtext}>
+              This may take a few seconds if you have many posts
+            </Text>
+          </View>
+        ) : posts.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="camera-outline" size={80} color="#999" />
-            <Text style={styles.emptyStateTitle}>Welcome to Instagram!</Text>
+            <Text style={styles.emptyStateTitle}>
+              {loading ? 'Loading posts...' : 'Welcome to Instagram!'}
+            </Text>
             <Text style={styles.emptyStateText}>
-              Create your first post to get started, or find people to follow.
+              {loading 
+                ? 'Please wait while we fetch your feed...' 
+                : 'Create your first post to get started, or find people to follow.'
+              }
             </Text>
           </View>
         ) : (
           posts.map((post) => renderPost(post))
         )}
       </ScrollView>
-    </View>
+      </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
   container: {
     flex: 1,
     backgroundColor: '#fff',
@@ -346,20 +379,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: Math.max(16, screenWidth * 0.04),
+    paddingVertical: Math.max(10, screenHeight * 0.012),
     borderBottomWidth: 0.5,
     borderBottomColor: '#e1e1e1',
   },
   logo: {
-    fontSize: 24,
+    fontSize: Math.max(24, screenWidth * 0.06),
     fontWeight: 'bold',
   },
   headerActions: {
     flexDirection: 'row',
   },
   headerButton: {
-    marginLeft: 16,
+    marginLeft: Math.max(16, screenWidth * 0.04),
   },
   feed: {
     flex: 1,
@@ -368,6 +401,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 60,
     paddingHorizontal: 32,
+  },
+  loadingState: {
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 32,
+  },
+  loadingText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  loadingSubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   emptyStateTitle: {
     fontSize: 20,
@@ -392,21 +442,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: Math.max(16, screenWidth * 0.04),
+    paddingVertical: Math.max(12, screenHeight * 0.015),
   },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: Math.max(32, screenWidth * 0.08),
+    height: Math.max(32, screenWidth * 0.08),
+    borderRadius: Math.max(16, screenWidth * 0.04),
     backgroundColor: '#f0f0f0',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: Math.max(12, screenWidth * 0.03),
   },
   avatarImage: {
     width: 32,
@@ -429,7 +479,7 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
   },
   noImageContainer: {
-    width: '100%',
+    width: screenWidth,
     aspectRatio: 1,
     backgroundColor: '#f8f8f8',
     alignItems: 'center',

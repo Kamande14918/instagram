@@ -10,15 +10,17 @@ import {
   Alert,
   ActivityIndicator,
   Dimensions,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { VideoView } from 'expo-video';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../services/supabase';
 
-const { width, height } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 interface MediaItem {
   uri: string;
@@ -30,6 +32,7 @@ interface MediaItem {
 export const CreatePostScreen: React.FC = () => {
   const { user } = useAuth();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [selectedMedia, setSelectedMedia] = useState<MediaItem[]>([]);
   const [caption, setCaption] = useState('');
   const [location, setLocation] = useState('');
@@ -208,7 +211,6 @@ export const CreatePostScreen: React.FC = () => {
             player={null}
             style={styles.previewImage}
             contentFit="cover"
-            allowsExternalPlayback={false}
             allowsPictureInPicture={false}
           />
         )}
@@ -323,7 +325,6 @@ export const CreatePostScreen: React.FC = () => {
                     player={null}
                     style={styles.shareMediaImage}
                     contentFit="cover"
-                    allowsExternalPlayback={false}
                     allowsPictureInPicture={false}
                   />
                 )}
@@ -381,6 +382,10 @@ export const CreatePostScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
   container: {
     flex: 1,
     backgroundColor: '#fff',
@@ -449,8 +454,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   mediaPreview: {
-    width: width,
-    height: width * 1.25,
+    width: screenWidth,
+    height: screenWidth * 1.25,
     position: 'relative',
   },
   previewImage: {
